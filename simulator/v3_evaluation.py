@@ -4,7 +4,7 @@ RecoveryOS V3 — System Evaluation Benchmark Runner
 Compares:
 1. V1 RecoveryOS Baseline
 2. V2 Counterfactual Value Engine
-3. V3 Calibrated Probability Estimator
+3. V3 Promoted Uncertainty-Aware Hybrid Policy (Threshold ₹35)
 4. Failure-Aware Rules Baseline
 5. Oracle Ceiling
 
@@ -24,13 +24,10 @@ sys.path.insert(0, str(BASE_DIR))
 
 from simulator.baseline_strategies import failure_aware_rules, ACTION_COSTS
 from simulator.value_engine import CounterfactualValueEngine
-from simulator.v3_counterfactual_model import V3ActionSpecificModelBundle
 
 TEST_PATH = BASE_DIR / "data" / "test_features.csv"
 GROUND_TRUTH_PATH = BASE_DIR / "data" / "counterfactual_training.csv"
 V2_MODEL_PATH = BASE_DIR / "data" / "recovery_probability" / "counterfactual_model.pkl.gz"
-V3_MODEL_PATH = BASE_DIR / "data" / "recovery_probability" / "v3_counterfactual_model.pkl.gz"
-V3_CALIBRATED_MODEL_PATH = BASE_DIR / "data" / "recovery_probability" / "v3_calibrated_model.pkl.gz"
 
 MODEL_FEATURES = [
     "amount", "account_age_days", "successful_payments", "failed_payments",
@@ -69,18 +66,12 @@ def run_v3_benchmark_evaluation():
     engine = CounterfactualValueEngine()
 
     v2_model = load_model_from_path(V2_MODEL_PATH)
-    v3_cal_model = load_model_from_path(V3_CALIBRATED_MODEL_PATH) or v2_model
-
     total_failures = len(test_df)
     total_revenue_at_risk = test_df["amount"].sum()
 
     # 1. V2 Policy Selection
     v2_cand_df = engine.generate_candidate_table(test_df, v2_model, MODEL_FEATURES)
     v2_dec_df = engine.select_best_decisions(v2_cand_df)
-
-    # 2. V3 Calibrated Policy Selection
-    v3_cand_df = engine.generate_candidate_table(test_df, v3_cal_model, MODEL_FEATURES)
-    v3_dec_df = engine.select_best_decisions(v3_cand_df)
 
     # Evaluate V2 on Ground Truth
     v2_rows = []
@@ -94,13 +85,32 @@ def run_v3_benchmark_evaluation():
             cost = ACTION_COSTS.get(act, 0.0)
             gross = amt * prob
             net = gross - cost
-        v2_rows.append({"gross": gross, "cost": cost, "net": net})
+        v2_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
     v2_res = pd.DataFrame(v2_rows)
 
-    # Evaluate V3 Calibrated on Ground Truth
-    v3_rows = []
-    for _, row in v3_dec_df.iterrows():
-        fid, act, amt = str(row["failure_id"]), str(row["candidate_action"]), float(row["amount"])
+    # 2. V3 Promoted Hybrid Policy Selection (Threshold ₹35)
+    v3_hybrid_rows = []
+    v3_hybrid_actions = []
+    threshold = 35.0
+
+    for _, test_row in test_df.iterrows():
+        fid = str(test_row["failure_id"])
+        amt = float(test_row["amount"])
+
+        sub = v2_cand_df[v2_cand_df["failure_id"].astype(str) == fid].sort_values("expected_net_recovery", ascending=False)
+        top1 = sub.iloc[0]
+        top2 = sub.iloc[1] if len(sub) > 1 else top1
+
+        ml_act = str(top1["candidate_action"])
+        margin = float(top1["expected_net_recovery"]) - float(top2["expected_net_recovery"])
+
+        if margin < threshold:
+            act = failure_aware_rules(test_row)
+        else:
+            act = ml_act
+
+        v3_hybrid_actions.append(act)
+
         if act == "STOP":
             prob, cost, gross, net = 0.0, 0.0, 0.0, 0.0
         else:
@@ -109,10 +119,10 @@ def run_v3_benchmark_evaluation():
             cost = ACTION_COSTS.get(act, 0.0)
             gross = amt * prob
             net = gross - cost
-        v3_rows.append({"gross": gross, "cost": cost, "net": net})
-    v3_res = pd.DataFrame(v3_rows)
+        v3_hybrid_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
+    v3_res = pd.DataFrame(v3_hybrid_rows)
 
-    # Evaluate Failure-Aware Rules on Ground Truth
+    # 3. Evaluate Failure-Aware Rules on Ground Truth
     rules_rows = []
     for _, row in test_df.iterrows():
         fid, amt = str(row["failure_id"]), float(row["amount"])
@@ -122,10 +132,10 @@ def run_v3_benchmark_evaluation():
         cost = ACTION_COSTS.get(act, 0.0)
         gross = amt * prob
         net = gross - cost
-        rules_rows.append({"gross": gross, "cost": cost, "net": net})
+        rules_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
     rules_res = pd.DataFrame(rules_rows)
 
-    # Evaluate Oracle Ceiling on Ground Truth
+    # 4. Evaluate Oracle Ceiling on Ground Truth
     test_fids = set(test_df["failure_id"].astype(str))
     oracle_rows = []
     for fid, group in gt_df.groupby("failure_id"):
@@ -165,7 +175,7 @@ def run_v3_benchmark_evaluation():
             f"{v2_res['net'].sum():,.2f}",
             f"{(v2_res['gross'].sum() / total_revenue_at_risk)*100:.2f}%",
         ],
-        "V3 Calibrated ML": [
+        "V3 Hybrid Policy (Promoted)": [
             f"{total_failures}",
             f"{total_revenue_at_risk:,.2f}",
             f"{v3_res['gross'].sum():,.2f}",
@@ -194,12 +204,8 @@ def run_v3_benchmark_evaluation():
     results_df = pd.DataFrame(table_data)
     print(results_df.to_string(index=False))
 
-    # Calculate Oracle Action Match for V3
-    v3_oracle_matches = 0
-    oracle_action_map = dict(zip(oracle_res.index, oracle_res["action"]))
-    for idx, row in v3_dec_df.iterrows():
-        if row["candidate_action"] == oracle_action_map.get(idx):
-            v3_oracle_matches += 1
+    # Calculate Oracle Action Match for V3 Promoted
+    v3_oracle_matches = sum(1 for i, row in v3_res.iterrows() if row["action"] == oracle_res.iloc[i]["action"])
     v3_oracle_match_pct = (v3_oracle_matches / total_failures) * 100
 
     v2_net = v2_res['net'].sum()
@@ -211,7 +217,7 @@ def run_v3_benchmark_evaluation():
     print("KEY PERFORMANCE COMPARISONS:")
     print("----------------------------------------------------------------------")
     print(f"V2 Expected Net Recovery:         ₹{v2_net:,.2f}")
-    print(f"V3 Expected Net Recovery:         ₹{v3_net:,.2f}")
+    print(f"V3 Hybrid Expected Net Recovery:  ₹{v3_net:,.2f}")
     print(f"Rules Expected Net Recovery:      ₹{rules_net:,.2f}")
     print(f"Oracle Expected Net Recovery:     ₹{oracle_net:,.2f}")
 
