@@ -81,6 +81,14 @@ class SafetyPolicyEngine:
                 "policy_checks": ["ACTION_STOP"],
             }
 
+        # 2. Stale Event Detection Guardrail
+        if decision_record.get("is_stale", False) or decision_record.get("event_age_days", 0) > 30:
+            return {
+                "policy_result": "STOP",
+                "policy_reason": "Payment failure event is stale (> 30 days old). Autonomous execution blocked.",
+                "policy_checks": ["STALE_EVENT_BLOCKED"],
+            }
+
         # 2. Incompatible Action Rule Check
         if failure_reason in INCOMPATIBLE_ACTION_RULES:
             if action in INCOMPATIBLE_ACTION_RULES[failure_reason]:

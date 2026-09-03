@@ -61,6 +61,18 @@ class TestFastAPIEndpoints(unittest.TestCase):
         self.assertIn("total_failures", data)
         self.assertIn("overall_recovery_rate", data)
 
+    def test_v2_events_malformed_payload_returns_422(self):
+        malformed_payload = {
+            "event_id": "EVT_BAD_001",
+            "failure_id": "FAIL_BAD_001",
+            "payment_id": "PAY_BAD_001",
+            "customer_id": "CUST_BAD_001",
+            "amount": -100.0,  # Invalid negative amount!
+            "failure_reason": "INSUFFICIENT_FUNDS",
+        }
+        response = client.post("/api/v2/events/failure", json=malformed_payload)
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

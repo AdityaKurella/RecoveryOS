@@ -63,6 +63,33 @@ class TestPortfolioOptimizer(unittest.TestCase):
         self.assertEqual(len(selected_active), 1)
         self.assertEqual(selected_active.iloc[0]["failure_id"], "FAIL_001")
 
+    def test_max_budget_cumulative_constraint(self):
+        # Create 5 failure rows each costing ₹3.0 (total ₹15.0 if all selected)
+        rows = []
+        for i in range(1, 6):
+            rows.append({
+                "failure_id": f"FAIL_BUDGET_{i:03d}",
+                "customer_id": f"CUST_{i:03d}",
+                "amount": 1000.0,
+                "candidate_action": "PAYMENT_LINK",
+                "estimated_recovery_probability": 0.8,
+                "intervention_cost": 3.0,
+                "expected_gross_recovery": 800.0,
+                "expected_net_recovery": 797.0 - i,
+                "rank": 1,
+            })
+        candidate_df = pd.DataFrame(rows)
+
+        # Set max_budget = ₹7.0 (allows max 2 actions @ ₹3.0 each = ₹6.0)
+        optimizer = PortfolioOptimizer(capacity=10, max_budget=7.0)
+        portfolio_df = optimizer.optimize_portfolio(candidate_df)
+
+        selected_active = portfolio_df[portfolio_df["portfolio_status"] == "SELECTED_IN_CAPACITY"]
+        self.assertEqual(len(selected_active), 2)
+        total_cost = selected_active["intervention_cost"].sum()
+        self.assertEqual(total_cost, 6.0)
+        self.assertLessEqual(total_cost, 7.0)
+
 
 if __name__ == "__main__":
     unittest.main()

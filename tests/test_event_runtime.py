@@ -123,6 +123,21 @@ class TestEventDrivenRuntime(unittest.TestCase):
         self.assertEqual(policy_res["policy_result"], "HUMAN")
         self.assertIn("HIGH_VALUE_LOW_CONFIDENCE_HUMAN", policy_res["policy_checks"])
 
+    def test_stale_payment_event_rejection(self):
+        policy_engine = SafetyPolicyEngine()
+        stale_decision = {
+            "candidate_action": "PAYMENT_LINK",
+            "amount": 500.0,
+            "estimated_recovery_probability": 0.85,
+            "expected_net_recovery": 422.0,
+            "failure_reason": "INSUFFICIENT_FUNDS",
+            "event_age_days": 45,  # > 30 days stale!
+        }
+
+        policy_res = policy_engine.evaluate_policy(stale_decision)
+        self.assertEqual(policy_res["policy_result"], "STOP")
+        self.assertIn("STALE_EVENT_BLOCKED", policy_res["policy_checks"])
+
 
 if __name__ == "__main__":
     unittest.main()
