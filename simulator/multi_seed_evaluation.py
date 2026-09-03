@@ -1,5 +1,5 @@
 """
-RecoveryOS V2 — Milestone 8 & 9: Multi-Seed Evaluation & Model Diagnostics Engine
+RecoveryOS V3 — Multi-Seed Evaluation & Model Diagnostics Engine
 
 Evaluates strategies across 5 independent random seeds (42, 101, 202, 303, 404)
 and computes distribution statistics (mean, median, std, min, max) for expected & realized net recovery,
@@ -35,7 +35,7 @@ def load_model():
 
 def run_multi_seed_evaluation():
     print("\n======================================================================")
-    print("RECOVERYOS V2 — MILESTONE 8 & 9 MULTI-SEED EVALUATION (5 SEEDS)")
+    print("RECOVERYOS V3 — MULTI-SEED EVALUATION (5 SEEDS)")
     print("======================================================================")
 
     test_df = pd.read_csv(TEST_PATH)
@@ -73,14 +73,28 @@ def run_multi_seed_evaluation():
     v2_decisions = engine.select_best_decisions(cand_df)
     v2_map = dict(zip(v2_decisions["failure_id"], v2_decisions.to_dict("records")))
 
+    # Calculate deterministic Ground-Truth Expected Net and Model-Estimated Expected Net
+    gt_expected_net = 0.0
+    model_estimated_net = 0.0
+    for _, row in test_df.iterrows():
+        fid = str(row["failure_id"])
+        amt = float(row["amount"])
+        rec = v2_map[fid]
+        act = str(rec["candidate_action"])
+        c = action_costs.get(act, 0.0)
+        p_true = gt_map.get((fid, act), 0.0) if act != "STOP" else 0.0
+        gt_expected_net += (amt * p_true) - c
+        model_estimated_net += float(rec["expected_net_recovery"])
+
+    print(f"Ground-Truth Expected NET Recovery: ₹{gt_expected_net:,.2f}")
+    print(f"Model-Estimated Expected NET Recovery: ₹{model_estimated_net:,.2f}")
+
     seed_results = []
 
     for seed in EVAL_SEEDS:
         rng = np.random.RandomState(seed)
 
         v2_realized_gross, v2_cost = 0.0, 0.0
-        v2_expected_gross, v2_expected_net = 0.0, 0.0
-
         rules_realized_gross, rules_cost = 0.0, 0.0
         oracle_realized_gross, oracle_cost = 0.0, 0.0
 
@@ -88,11 +102,9 @@ def run_multi_seed_evaluation():
             fid = str(row["failure_id"])
             amt = float(row["amount"])
 
-            # 1. V2 Decision
+            # 1. V2 Decision Realized Outcome
             v2_rec = v2_map[fid]
             v2_act = str(v2_rec["candidate_action"])
-            v2_expected_gross += float(v2_rec["expected_gross_recovery"])
-            v2_expected_net += float(v2_rec["expected_net_recovery"])
             v2_c = action_costs.get(v2_act, 0.0)
             v2_cost += v2_c
 
@@ -101,7 +113,7 @@ def run_multi_seed_evaluation():
                 if rng.rand() < v2_true_p:
                     v2_realized_gross += amt
 
-            # 2. Rules Decision
+            # 2. Rules Decision Realized Outcome
             r_act = failure_aware_rules(row)
             r_c = action_costs.get(r_act, 0.0)
             rules_cost += r_c
@@ -109,7 +121,7 @@ def run_multi_seed_evaluation():
             if rng.rand() < r_true_p:
                 rules_realized_gross += amt
 
-            # 3. Oracle Decision
+            # 3. Oracle Decision Realized Outcome
             o_info = oracle_map[fid]
             o_act = o_info["action"]
             o_c = action_costs.get(o_act, 0.0)
@@ -123,7 +135,7 @@ def run_multi_seed_evaluation():
 
         seed_results.append({
             "seed": seed,
-            "v2_expected_net": v2_expected_net,
+            "gt_expected_net": gt_expected_net,
             "v2_realized_net": v2_realized_net,
             "rules_realized_net": rules_realized_net,
             "oracle_realized_net": oracle_realized_net,
