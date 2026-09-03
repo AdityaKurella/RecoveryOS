@@ -1,0 +1,21 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Frontend / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.venv/
+.npm
+*.log
+
+# IDEs & System
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
