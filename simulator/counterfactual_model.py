@@ -1081,6 +1081,8 @@ def train_model(rows):
 # SAVE MODEL
 # ============================================================
 
+import gzip
+
 def save_model(model_bundle):
 
     MODEL_DIR.mkdir(
@@ -1088,17 +1090,15 @@ def save_model(model_bundle):
         exist_ok=True,
     )
 
-    with open(
-        MODEL_PATH,
-        "wb",
-    ) as file:
-
+    gz_path = MODEL_DIR / "counterfactual_model.pkl.gz"
+    with gzip.open(gz_path, "wb", compresslevel=6) as file:
         pickle.dump(
             model_bundle,
             file,
         )
 
-    return MODEL_PATH
+    return gz_path
+
 
 
 # ============================================================

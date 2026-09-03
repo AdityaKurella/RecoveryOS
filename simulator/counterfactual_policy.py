@@ -121,8 +121,21 @@ print("Validation: PASS")
 
 print("\n========== LOADING M10F MODEL ==========")
 
-with open(MODEL_PATH, "rb") as f:
-    model_bundle = pickle.load(f)
+import gzip
+
+if MODEL_PATH.with_name("counterfactual_model.pkl.gz").exists():
+    with gzip.open(MODEL_PATH.with_name("counterfactual_model.pkl.gz"), "rb") as f:
+        model_bundle = pickle.load(f)
+elif MODEL_PATH.exists():
+    try:
+        with gzip.open(MODEL_PATH, "rb") as f:
+            model_bundle = pickle.load(f)
+    except Exception:
+        with open(MODEL_PATH, "rb") as f:
+            model_bundle = pickle.load(f)
+else:
+    raise FileNotFoundError(f"Model file not found at {MODEL_PATH} or {MODEL_PATH.with_name('counterfactual_model.pkl.gz')}")
+
 
 
 if isinstance(model_bundle, dict) and "model" in model_bundle:
