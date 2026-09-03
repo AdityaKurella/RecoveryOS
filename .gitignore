@@ -24,3 +24,4 @@ data/recovery_probability/counterfactual_model.pkl
 .vscode/
 .DS_Store
 Thumbs.db
+*.db

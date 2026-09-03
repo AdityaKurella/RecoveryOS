@@ -3,6 +3,7 @@ API Integration Unit Tests for FastAPI Service
 """
 
 import sys
+import time
 import unittest
 from pathlib import Path
 from fastapi.testclient import TestClient
@@ -32,10 +33,11 @@ class TestFastAPIEndpoints(unittest.TestCase):
         self.assertEqual(data["portfolio_capacity"], 100)
 
     def test_v2_events_failure_endpoint(self):
+        unique_id = f"EVT_API_{int(time.time()*1000)}"
         payload = {
-            "event_id": "EVT_TEST_API_001",
-            "failure_id": "FAIL_TEST_API_001",
-            "payment_id": "PAY_TEST_API_001",
+            "event_id": unique_id,
+            "failure_id": f"FAIL_{unique_id}",
+            "payment_id": f"PAY_{unique_id}",
             "customer_id": "CUST_TEST_API_001",
             "amount": 1250.0,
             "failure_reason": "INSUFFICIENT_FUNDS",

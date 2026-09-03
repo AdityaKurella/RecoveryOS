@@ -21,16 +21,32 @@ class MockModel:
         return np.array([[0.15, 0.85] for _ in range(len(X))])
 
 
+import tempfile
+import os
+from simulator.persistence import DurableStateStore
+
+
 class TestEventDrivenRuntime(unittest.TestCase):
 
     def setUp(self):
-        self.runtime = EventDrivenRuntime()
+        self.temp_fd, self.temp_path = tempfile.mkstemp(suffix=".db")
+        os.close(self.temp_fd)
+        store = DurableStateStore(db_path=Path(self.temp_path))
+        self.runtime = EventDrivenRuntime(config=None)
+        self.runtime.idempotency = IdempotencyManager(db_store=store)
         self.model = MockModel()
         self.model_features = [
             "amount", "account_age_days", "successful_payments", "failed_payments",
             "total_payments", "payment_success_rate", "historical_recovery_rate",
             "engagement_score", "failure_reason", "behavior_profile", "candidate_action"
         ]
+
+    def tearDown(self):
+        try:
+            if os.path.exists(self.temp_path):
+                os.remove(self.temp_path)
+        except Exception:
+            pass
 
     def test_normal_event_processing(self):
         event = {

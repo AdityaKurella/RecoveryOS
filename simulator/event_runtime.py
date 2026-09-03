@@ -28,15 +28,26 @@ from simulator.config import (
 from simulator.value_engine import CounterfactualValueEngine
 
 
+from simulator.persistence import DurableStateStore
+
+
 class IdempotencyManager:
-    """Stores processed events, decisions, and executions to prevent duplicates."""
-    def __init__(self):
+    """Stores processed events, decisions, and executions with durable SQLite persistence."""
+    def __init__(self, db_store: Optional[DurableStateStore] = None):
+        self.durable_store = db_store or DurableStateStore()
         self.processed_events: Dict[str, Dict[str, Any]] = {}
         self.processed_failures: Dict[str, Dict[str, Any]] = {}
         self.executed_decisions: Dict[str, Dict[str, Any]] = {}
 
     def is_duplicate_event(self, event_id: str) -> bool:
-        return event_id in self.processed_events
+        if event_id in self.processed_events:
+            return True
+        return self.durable_store.is_duplicate_event(event_id)
+
+    def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
+        if event_id in self.processed_events:
+            return self.processed_events[event_id]
+        return self.durable_store.get_event_record(event_id)
 
     def is_duplicate_failure(self, failure_id: str) -> bool:
         return failure_id in self.processed_failures
@@ -46,12 +57,21 @@ class IdempotencyManager:
 
     def record_event(self, event_id: str, record: Dict[str, Any]):
         self.processed_events[event_id] = record
+        fid = str(record.get("failure_id", ""))
+        pid = str(record.get("payment_id", ""))
+        cid = str(record.get("customer_id", ""))
+        self.durable_store.record_event_and_decision(event_id, fid, pid, cid, record)
 
     def record_failure(self, failure_id: str, record: Dict[str, Any]):
         self.processed_failures[failure_id] = record
 
     def record_execution(self, decision_id: str, record: Dict[str, Any]):
         self.executed_decisions[decision_id] = record
+        exec_id = str(record.get("execution_id", ""))
+        fid = str(record.get("failure_id", ""))
+        status = str(record.get("execution_status", ""))
+        result = str(record.get("execution_result", ""))
+        self.durable_store.record_execution(exec_id, decision_id, fid, status, result, record)
 
 
 class SafetyPolicyEngine:
@@ -155,7 +175,7 @@ class EventDrivenRuntime:
 
         # 1. Idempotency Protection Check
         if self.idempotency.is_duplicate_event(event_id):
-            cached = self.idempotency.processed_events[event_id]
+            cached = self.idempotency.get_event(event_id)
             return {
                 "status": "REJECTED_DUPLICATE_EVENT",
                 "message": f"Event '{event_id}' has already been processed.",
