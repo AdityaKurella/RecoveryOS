@@ -109,7 +109,9 @@ function formatEvaluationMetric(metric, value) {
 function isSelected(item) {
   return (
     item.selected === true ||
-    String(item.selected).toLowerCase() === "true"
+    String(item.selected).toLowerCase() === "true" ||
+    item.portfolio_selected === true ||
+    String(item.portfolio_selected).toLowerCase() === "true"
   )
 }
 
@@ -191,12 +193,24 @@ function App() {
 
       setData({
         overview: result.overview ?? null,
-        portfolio: result.portfolio?.items || [],
-        decisions: result.decisions?.items || [],
-        outcomes: result.outcomes?.items || [],
-        policy: result.policy?.items || [],
-        execution: result.execution?.items || [],
-        evaluation: result.evaluation?.items || [],
+        portfolio: Array.isArray(result.portfolio)
+          ? result.portfolio
+          : result.portfolio?.items || [],
+        decisions: Array.isArray(result.decisions)
+          ? result.decisions
+          : result.decisions?.items || [],
+        outcomes: Array.isArray(result.outcomes)
+          ? result.outcomes
+          : result.outcomes?.items || [],
+        policy: Array.isArray(result.policy)
+          ? result.policy
+          : result.policy?.items || [],
+        execution: Array.isArray(result.execution)
+          ? result.execution
+          : result.execution?.items || [],
+        evaluation: Array.isArray(result.evaluation)
+          ? result.evaluation
+          : result.evaluation?.items || [],
       })
     } catch (err) {
       if (requestId !== requestRef.current) return
@@ -459,6 +473,13 @@ function OverviewPage({ overview, portfolio, stoppedCount, loading }) {
     [portfolio],
   )
 
+  const revenueAtRisk = overview?.total_value_at_risk ?? overview?.revenue_at_risk
+  const expectedRecovery = overview?.expected_recovered_amount ?? overview?.expected_recovery
+  const simulatedRecovered = overview?.actual_recovered_amount ?? overview?.simulated_recovered
+  const recoveryRate = overview?.overall_recovery_rate ?? overview?.recovery_rate
+  const portfolioCases = overview?.selected_cases ?? overview?.portfolio_cases ?? selected.length
+  const executedCases = overview?.selected_cases ?? overview?.executed_cases
+
   const expectedNet = useMemo(
     () =>
       selected.reduce(
@@ -477,28 +498,28 @@ function OverviewPage({ overview, portfolio, stoppedCount, loading }) {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Revenue at Risk"
-          value={money(overview?.revenue_at_risk)}
-          description={`${overview?.portfolio_cases ?? "—"} prioritized cases`}
+          value={money(revenueAtRisk)}
+          description={`${portfolioCases ?? "—"} prioritized cases`}
           loading={loading}
         />
         <MetricCard
           label="Expected Recovery"
-          value={money(overview?.expected_recovery)}
+          value={money(expectedRecovery)}
           description="Before intervention cost (simulated)"
           loading={loading}
         />
         <MetricCard
           label="Simulated Recovered"
-          value={money(overview?.simulated_recovered)}
-          description={`${overview?.recovered_cases ?? "—"} successful outcomes`}
+          value={money(simulatedRecovered)}
+          description={`${executedCases ?? "—"} successful outcomes`}
           loading={loading}
           highlight
         />
         <MetricCard
           label="Recovery Rate"
           value={
-            isValidNumber(overview?.recovery_rate)
-              ? percent(Number(overview.recovery_rate))
+            isValidNumber(recoveryRate)
+              ? percent(Number(recoveryRate))
               : "—"
           }
           description="Simulated recovery rate"
@@ -531,11 +552,11 @@ function OverviewPage({ overview, portfolio, stoppedCount, loading }) {
           <div className="space-y-5 p-5">
             <DecisionRow
               label="Autonomous cases"
-              value={overview?.executed_cases ?? "—"}
+              value={executedCases ?? "—"}
             />
             <DecisionRow
               label="Human review"
-              value={overview?.human_cases ?? "—"}
+              value={overview?.human_cases ?? 0}
             />
             <DecisionRow label="Stopped" value={stoppedCount} />
 
