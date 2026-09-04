@@ -67,6 +67,10 @@ class DurableStateStore:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_events_failure_id
+                ON events(failure_id) WHERE failure_id IS NOT NULL AND failure_id != ''
+            """)
             conn.commit()
 
     def is_duplicate_event(self, event_id: str) -> bool:
@@ -75,10 +79,29 @@ class DurableStateStore:
             cursor.execute("SELECT 1 FROM events WHERE event_id = ?", (event_id,))
             return cursor.fetchone() is not None
 
+    def is_duplicate_failure(self, failure_id: str) -> bool:
+        if not failure_id:
+            return False
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM events WHERE failure_id = ?", (failure_id,))
+            return cursor.fetchone() is not None
+
     def get_event_record(self, event_id: str) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT record_json FROM decisions WHERE event_id = ?", (event_id,))
+            row = cursor.fetchone()
+            if row and row["record_json"]:
+                return json.loads(row["record_json"])
+            return None
+
+    def get_failure_record(self, failure_id: str) -> Optional[Dict[str, Any]]:
+        if not failure_id:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT record_json FROM decisions WHERE failure_id = ?", (failure_id,))
             row = cursor.fetchone()
             if row and row["record_json"]:
                 return json.loads(row["record_json"])

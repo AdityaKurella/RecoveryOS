@@ -29,6 +29,7 @@ from simulator.value_engine import CounterfactualValueEngine
 
 
 from simulator.persistence import DurableStateStore
+from simulator.execution_adapters import BaseExecutionAdapter, SimulationExecutionAdapter
 
 
 class IdempotencyManager:
@@ -50,7 +51,18 @@ class IdempotencyManager:
         return self.durable_store.get_event_record(event_id)
 
     def is_duplicate_failure(self, failure_id: str) -> bool:
-        return failure_id in self.processed_failures
+        if not failure_id:
+            return False
+        if failure_id in self.processed_failures:
+            return True
+        return self.durable_store.is_duplicate_failure(failure_id)
+
+    def get_failure(self, failure_id: str) -> Optional[Dict[str, Any]]:
+        if not failure_id:
+            return None
+        if failure_id in self.processed_failures:
+            return self.processed_failures[failure_id]
+        return self.durable_store.get_failure_record(failure_id)
 
     def is_decision_executed(self, decision_id: str) -> bool:
         return decision_id in self.executed_decisions
@@ -152,9 +164,15 @@ class SafetyPolicyEngine:
 
 class EventDrivenRuntime:
     """Engine orchestrating the complete event pipeline."""
-    def __init__(self, value_engine: Optional[CounterfactualValueEngine] = None, config: Optional[SystemConfig] = None):
+    def __init__(
+        self,
+        value_engine: Optional[CounterfactualValueEngine] = None,
+        config: Optional[SystemConfig] = None,
+        execution_adapter: Optional[BaseExecutionAdapter] = None,
+    ):
         self.value_engine = value_engine or CounterfactualValueEngine()
         self.policy_engine = SafetyPolicyEngine(config)
+        self.execution_adapter = execution_adapter or SimulationExecutionAdapter()
         self.idempotency = IdempotencyManager()
         self.audit_log: List[Dict[str, Any]] = []
 
@@ -182,6 +200,14 @@ class EventDrivenRuntime:
                 "record": cached,
             }
 
+        if failure_id and self.idempotency.is_duplicate_failure(failure_id):
+            cached = self.idempotency.get_failure(failure_id) or self.idempotency.get_event(event_id)
+            return {
+                "status": "REJECTED_DUPLICATE_EVENT",
+                "message": f"Failure ID '{failure_id}' has already been processed.",
+                "record": cached,
+            }
+
         if payment_status in ["SUCCESS", "RECOVERED"]:
             return {
                 "status": "REJECTED_ALREADY_RECOVERED",
@@ -206,46 +232,37 @@ class EventDrivenRuntime:
         policy_eval = self.policy_engine.evaluate_policy(best_decision)
         best_decision.update(policy_eval)
 
-        # 4. Simulate Execution Adapter
+        # 4. Dispatch Execution Adapter
         policy_res = policy_eval["policy_result"]
         exec_hash = hashlib.sha256(f"{decision_id}_{policy_res}".encode()).hexdigest()[:12]
         execution_id = f"EXEC_{exec_hash}"
         best_decision["execution_id"] = execution_id
 
         if policy_res == "ALLOW":
-            execution_status = "EXECUTED_SIMULATION"
-            execution_result = best_decision["candidate_action"]
+            adapter_res = self.execution_adapter.execute_action(best_decision)
+            best_decision.update(adapter_res)
         elif policy_res == "HUMAN":
-            execution_status = "NOT_AUTONOMOUSLY_EXECUTED"
-            execution_result = "HUMAN_ESCALATION"
+            best_decision.update({
+                "execution_mode": getattr(self.execution_adapter, "execution_mode", "SIMULATION"),
+                "execution_status": "NOT_AUTONOMOUSLY_EXECUTED",
+                "execution_result": "HUMAN_ESCALATION",
+                "simulated_recovered": False,
+                "realized_gross_recovery": 0.0,
+                "realized_net_recovery": 0.0,
+            })
         else:
-            execution_status = "NOT_EXECUTED"
-            execution_result = "STOPPED"
+            best_decision.update({
+                "execution_mode": getattr(self.execution_adapter, "execution_mode", "SIMULATION"),
+                "execution_status": "NOT_EXECUTED",
+                "execution_result": "STOPPED",
+                "simulated_recovered": False,
+                "realized_gross_recovery": 0.0,
+                "realized_net_recovery": 0.0,
+            })
 
-        best_decision["execution_status"] = execution_status
-        best_decision["execution_result"] = execution_result
-
-        # 5. Outcome Engine (Simulated Outcome Audit)
+        # 5. Outcome Engine (Audit Record)
         out_hash = hashlib.sha256(f"{execution_id}_{failure_id}".encode()).hexdigest()[:12]
-        outcome_id = f"OUT_{out_hash}"
-        best_decision["outcome_id"] = outcome_id
-
-        # Simulate outcome deterministically using hash
-        if execution_status == "EXECUTED_SIMULATION":
-            prob = best_decision["estimated_recovery_probability"]
-            # SHA256 uniform float draw in [0, 1]
-            draw_val = int(hashlib.sha256(f"outcome_{failure_id}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
-            recovered = draw_val < prob
-            realized_gross = float(best_decision["amount"]) if recovered else 0.0
-            realized_net = realized_gross - float(best_decision["intervention_cost"])
-        else:
-            recovered = False
-            realized_gross = 0.0
-            realized_net = 0.0
-
-        best_decision["simulated_recovered"] = recovered
-        best_decision["realized_gross_recovery"] = realized_gross
-        best_decision["realized_net_recovery"] = realized_net
+        best_decision["outcome_id"] = f"OUT_{out_hash}"
 
         # Record in Idempotency and Audit Log
         self.idempotency.record_event(event_id, best_decision)

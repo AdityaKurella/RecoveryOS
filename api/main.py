@@ -18,8 +18,8 @@ from simulator.v2_counterfactual_policy import load_model, MODEL_PATH, MODEL_FEA
 DATA_DIR = BASE_DIR / "data"
 
 app = FastAPI(
-    title="RecoveryOS V2 API",
-    version="2.0.0",
+    title="RecoveryOS V3.1 API",
+    version="3.1.0",
     description="Counterfactual AI Recovery Optimization & Decision Platform",
 )
 
@@ -160,7 +160,7 @@ def root():
     return {
         "status": "online",
         "service": "RecoveryOS API",
-        "version": "2.0.0",
+        "version": "3.1.0",
         "environment": "simulation",
     }
 

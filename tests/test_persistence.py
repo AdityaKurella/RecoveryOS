@@ -68,6 +68,22 @@ class TestDurableStateStore(unittest.TestCase):
         self.assertEqual(cached["candidate_action"], "UPDATE_PAYMENT_METHOD")
         self.assertEqual(cached["expected_net_recovery"], 750.0)
 
+    def test_is_duplicate_failure_and_get_failure_record(self):
+        event_id = "EVT_FAIL_DUP_01"
+        failure_id = "FAIL_DUP_ID_100"
+        decision_rec = {
+            "decision_id": "DEC_FAIL_DUP_01",
+            "event_id": event_id,
+            "failure_id": failure_id,
+            "candidate_action": "RETRY_NOW",
+            "policy_result": "ALLOW",
+        }
+        self.store.record_event_and_decision(event_id, failure_id, "PAY_01", "CUST_01", decision_rec)
+        self.assertTrue(self.store.is_duplicate_failure(failure_id))
+        cached = self.store.get_failure_record(failure_id)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["candidate_action"], "RETRY_NOW")
+
 
 if __name__ == "__main__":
     unittest.main()

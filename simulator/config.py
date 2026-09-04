@@ -14,8 +14,8 @@ MODEL_PATH = MODEL_DIR / "counterfactual_model.pkl.gz"
 # System & Policy Versions
 MODEL_VERSION = "M10F_v1"
 FEATURE_VERSION = "M10F_v1"
-POLICY_VERSION = "V2.0"
-SYSTEM_NAME = "RecoveryOS V2"
+POLICY_VERSION = "V3.1"
+SYSTEM_NAME = "RecoveryOS V3.1"
 
 # Candidate Actions
 ACTIVE_ACTIONS: List[str] = [

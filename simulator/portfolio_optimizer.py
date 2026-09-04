@@ -1,8 +1,9 @@
 """
-RecoveryOS V2 — Milestone 3: Portfolio Optimization Engine
+RecoveryOS V2 — Milestone 3: Greedy Priority Portfolio Optimizer under Capacity/Budget Constraints
 
-Ranks candidate recovery decisions across the entire portfolio to maximize total expected net recovery
-subject to intervention capacity constraints (K), budget constraints (B), and customer policy limits.
+Ranks candidate recovery decisions across the entire portfolio using a greedy priority rule
+to maximize total expected net recovery subject to intervention capacity constraints (K),
+budget constraints (B), and customer policy limits.
 """
 
 from typing import List, Dict, Any, Optional

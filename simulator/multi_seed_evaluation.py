@@ -1,5 +1,5 @@
 """
-RecoveryOS V3 — Multi-Seed Evaluation & Model Diagnostics Engine
+RecoveryOS V3 — Multi-seed realized-outcome robustness evaluation
 
 Evaluates strategies across 5 independent random seeds (42, 101, 202, 303, 404)
 and computes distribution statistics (mean, median, std, min, max) for expected & realized net recovery,
@@ -7,6 +7,8 @@ recovery rates, intervention costs, policy regret, and oracle opportunity gaps.
 """
 
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 import pickle
 import gzip
 from pathlib import Path

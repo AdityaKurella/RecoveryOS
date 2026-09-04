@@ -154,6 +154,85 @@ class TestEventDrivenRuntime(unittest.TestCase):
         self.assertEqual(policy_res["policy_result"], "STOP")
         self.assertIn("STALE_EVENT_BLOCKED", policy_res["policy_checks"])
 
+    def test_duplicate_failure_id_rejection(self):
+        event1 = {
+            "event_id": "EVT_F1",
+            "failure_id": "FAIL_SHARED_100",
+            "payment_id": "PAY_F1",
+            "customer_id": "CUST_F1",
+            "amount": 400.0,
+            "failure_reason": "INSUFFICIENT_FUNDS",
+            "behavior_profile": "normal",
+            "account_age_days": 100,
+            "successful_payments": 5,
+            "failed_payments": 1,
+            "total_payments": 6,
+            "payment_success_rate": 0.83,
+            "historical_recovery_rate": 0.5,
+            "engagement_score": 0.8,
+            "payment_status": "FAILED",
+        }
+        event2 = {
+            "event_id": "EVT_F2_DIFFERENT",
+            "failure_id": "FAIL_SHARED_100",  # Same failure ID under different event_id!
+            "payment_id": "PAY_F1",
+            "customer_id": "CUST_F1",
+            "amount": 400.0,
+            "failure_reason": "INSUFFICIENT_FUNDS",
+            "behavior_profile": "normal",
+            "account_age_days": 100,
+            "successful_payments": 5,
+            "failed_payments": 1,
+            "total_payments": 6,
+            "payment_success_rate": 0.83,
+            "historical_recovery_rate": 0.5,
+            "engagement_score": 0.8,
+            "payment_status": "FAILED",
+        }
+
+        res1 = self.runtime.process_payment_failed_event(event1, self.model, self.model_features)
+        self.assertEqual(res1["status"], "SUCCESS")
+
+        res2 = self.runtime.process_payment_failed_event(event2, self.model, self.model_features)
+        self.assertEqual(res2["status"], "REJECTED_DUPLICATE_EVENT")
+        self.assertIn("FAIL_SHARED_100", res2["message"])
+
+    def test_execution_adapter_injection(self):
+        class DummyAdapter:
+            execution_mode = "CUSTOM_TEST_MODE"
+            def execute_action(self, decision_record):
+                return {
+                    "execution_mode": "CUSTOM_TEST_MODE",
+                    "execution_status": "CUSTOM_EXECUTED",
+                    "execution_result": "DUMMY_SUCCESS",
+                }
+
+        runtime_custom = EventDrivenRuntime(execution_adapter=DummyAdapter())
+        runtime_custom.idempotency = IdempotencyManager(db_store=self.runtime.idempotency.durable_store)
+
+        event = {
+            "event_id": "EVT_CUSTOM_ADAPTER",
+            "failure_id": "FAIL_CUSTOM_ADAPTER",
+            "payment_id": "PAY_CUSTOM",
+            "customer_id": "CUST_CUSTOM",
+            "amount": 400.0,
+            "failure_reason": "INSUFFICIENT_FUNDS",
+            "behavior_profile": "normal",
+            "account_age_days": 100,
+            "successful_payments": 5,
+            "failed_payments": 1,
+            "total_payments": 6,
+            "payment_success_rate": 0.83,
+            "historical_recovery_rate": 0.5,
+            "engagement_score": 0.8,
+            "payment_status": "FAILED",
+        }
+
+        res = runtime_custom.process_payment_failed_event(event, self.model, self.model_features)
+        self.assertEqual(res["status"], "SUCCESS")
+        self.assertEqual(res["record"]["execution_status"], "CUSTOM_EXECUTED")
+        self.assertEqual(res["record"]["execution_mode"], "CUSTOM_TEST_MODE")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,8 @@ Strict Data Isolation: Ground-truth true probabilities are used ONLY in evaluati
 """
 
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 import pickle
 import gzip
 from pathlib import Path
@@ -119,7 +121,7 @@ def run_v3_benchmark_evaluation():
             cost = ACTION_COSTS.get(act, 0.0)
             gross = amt * prob
             net = gross - cost
-        v3_hybrid_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
+        v3_hybrid_rows.append({"failure_id": fid, "gross": gross, "cost": cost, "net": net, "action": act})
     v3_res = pd.DataFrame(v3_hybrid_rows)
 
     # 3. Evaluate Failure-Aware Rules on Ground Truth
@@ -132,12 +134,13 @@ def run_v3_benchmark_evaluation():
         cost = ACTION_COSTS.get(act, 0.0)
         gross = amt * prob
         net = gross - cost
-        rules_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
+        rules_rows.append({"failure_id": fid, "gross": gross, "cost": cost, "net": net, "action": act})
     rules_res = pd.DataFrame(rules_rows)
 
-    # 4. Evaluate Oracle Ceiling on Ground Truth
+    # 4. Evaluate Oracle Upper Bound on Ground Truth
     test_fids = set(test_df["failure_id"].astype(str))
     oracle_rows = []
+    oracle_map = {}
     for fid, group in gt_df.groupby("failure_id"):
         if str(fid) in test_fids:
             best_row = group.sort_values("expected_net_value", ascending=False).iloc[0]
@@ -147,7 +150,8 @@ def run_v3_benchmark_evaluation():
             cost = ACTION_COSTS.get(act, 0.0)
             gross = amt * prob
             net = gross - cost
-            oracle_rows.append({"gross": gross, "cost": cost, "net": net, "action": act})
+            oracle_rows.append({"failure_id": str(fid), "gross": gross, "cost": cost, "net": net, "action": act})
+            oracle_map[str(fid)] = act
     oracle_res = pd.DataFrame(oracle_rows)
 
     table_data = {
@@ -159,7 +163,7 @@ def run_v3_benchmark_evaluation():
             "Expected NET recovery (₹)",
             "Recovery rate (%)",
         ],
-        "V1 Baseline": [
+        "V1 Baseline (Hist Ref)": [
             f"{total_failures}",
             f"{total_revenue_at_risk:,.2f}",
             f"{843404.27:,.2f}",
@@ -191,7 +195,7 @@ def run_v3_benchmark_evaluation():
             f"{rules_res['net'].sum():,.2f}",
             f"{(rules_res['gross'].sum() / total_revenue_at_risk)*100:.2f}%",
         ],
-        "Oracle Ceiling": [
+        "Oracle Upper Bound": [
             f"{total_failures}",
             f"{total_revenue_at_risk:,.2f}",
             f"{oracle_res['gross'].sum():,.2f}",
@@ -204,8 +208,8 @@ def run_v3_benchmark_evaluation():
     results_df = pd.DataFrame(table_data)
     print(results_df.to_string(index=False))
 
-    # Calculate Oracle Action Match for V3 Promoted
-    v3_oracle_matches = sum(1 for i, row in v3_res.iterrows() if row["action"] == oracle_res.iloc[i]["action"])
+    # Calculate Oracle Action Match for V3 Promoted by Failure ID key
+    v3_oracle_matches = sum(1 for _, row in v3_res.iterrows() if row["action"] == oracle_map.get(row["failure_id"]))
     v3_oracle_match_pct = (v3_oracle_matches / total_failures) * 100
 
     v2_net = v2_res['net'].sum()
