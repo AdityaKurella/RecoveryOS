@@ -98,6 +98,7 @@ Razorpay Infrastructure → Failed Payment Event → RecoveryOS Decision Engine 
 - **`payment.failed` Webhook**: Ingests real webhook notifications via `POST /api/v2/webhooks/razorpay`.
 - **HMAC-SHA256 Signature Verification**: Computes HMAC signatures over raw HTTP request bodies to verify authenticity.
 - **Event ID Idempotency**: Uses Razorpay `x-razorpay-event-id` headers to prevent processing the same event twice.
+- **Customer Context**: Razorpay Test Mode webhook events currently use safe default context values when historical customer context is unavailable.
 - **Public HTTPS Tunnel**: Exposed via Cloudflare tunnel for external webhook delivery testing.
 
 > **Disclaimer**: Test Mode only. No real money is moved.
@@ -208,6 +209,8 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 
 - **Synthetic Benchmark**: Benchmark metrics reflect expected net recovery on a synthetic 559-case held-out test dataset, not live production revenue.
 - **Test Mode Only**: Razorpay integration uses Test Mode only; no live customer money is moved.
+- **Integration Defaults**: Webhook events currently use safe default context values when historical customer context is unavailable.
+- **Batch Portfolio Prioritization**: Single-event webhooks evaluate actions per failure; portfolio optimization operates on batch failed-payment datasets.
 - **Simulated Execution**: Action execution uses simulation adapters (`SimulationExecutionAdapter`).
 - **Local Storage**: State store uses a local SQLite database (`data/recoveryos_v3_state.db`).
 - **Buildathon Prototype**: RecoveryOS is an evaluation prototype built for the Razorpay AI Buildathon 2026.
@@ -230,4 +233,4 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 - **Project**: RecoveryOS
 - **Event**: Razorpay AI Buildathon 2026
 - **Track**: Track 03 — AI Revenue Recovery
-- **Repository**: [RecoveryOS GitHub Repository](https://github.com/YourUsername/recoveryos)
+- **Repository**: [RecoveryOS GitHub Repository](https://github.com/AdityaKurella/RecoveryOS)
