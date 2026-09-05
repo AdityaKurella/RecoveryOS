@@ -163,7 +163,7 @@ def run_v3_benchmark_evaluation():
             "Expected NET recovery (₹)",
             "Recovery rate (%)",
         ],
-        "V1 Baseline (Hist Ref)": [
+        "V1 Historical Reference": [
             f"{total_failures}",
             f"{total_revenue_at_risk:,.2f}",
             f"{843404.27:,.2f}",

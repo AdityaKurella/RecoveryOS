@@ -94,6 +94,10 @@ class DurableStateStore:
             row = cursor.fetchone()
             if row and row["record_json"]:
                 return json.loads(row["record_json"])
+            cursor.execute("SELECT payload_json FROM events WHERE event_id = ?", (event_id,))
+            row = cursor.fetchone()
+            if row and row["payload_json"]:
+                return json.loads(row["payload_json"])
             return None
 
     def get_failure_record(self, failure_id: str) -> Optional[Dict[str, Any]]:
@@ -105,7 +109,39 @@ class DurableStateStore:
             row = cursor.fetchone()
             if row and row["record_json"]:
                 return json.loads(row["record_json"])
+            cursor.execute("SELECT payload_json FROM events WHERE failure_id = ?", (failure_id,))
+            row = cursor.fetchone()
+            if row and row["payload_json"]:
+                return json.loads(row["payload_json"])
             return None
+
+    def claim_event_and_failure(self, event_id: str, failure_id: str, payment_id: str, customer_id: str, payload_dict: Dict[str, Any]) -> bool:
+        """
+        Atomically claims event_id and failure_id in SQLite database before action execution.
+        Returns True if claim succeeded, False if already claimed/inserted by another request.
+        """
+        rec_json = json.dumps(payload_dict)
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                if event_id:
+                    cursor.execute("SELECT 1 FROM events WHERE event_id = ?", (event_id,))
+                    if cursor.fetchone() is not None:
+                        return False
+                if failure_id:
+                    cursor.execute("SELECT 1 FROM events WHERE failure_id = ?", (failure_id,))
+                    if cursor.fetchone() is not None:
+                        return False
+                cursor.execute(
+                    "INSERT INTO events (event_id, failure_id, payment_id, customer_id, payload_json) VALUES (?, ?, ?, ?, ?)",
+                    (event_id, failure_id, payment_id, customer_id, rec_json)
+                )
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+        except Exception:
+            return False
 
     def record_event_and_decision(self, event_id: str, failure_id: str, payment_id: str, customer_id: str, decision_record: Dict[str, Any]):
         rec_json = json.dumps(decision_record)

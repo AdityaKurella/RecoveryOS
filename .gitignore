@@ -1,3 +1,7 @@
+# Environment & Credentials
+.env
+.env.*
+
 # Python
 .venv/
 venv/

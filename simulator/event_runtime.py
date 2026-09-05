@@ -64,6 +64,18 @@ class IdempotencyManager:
             return self.processed_failures[failure_id]
         return self.durable_store.get_failure_record(failure_id)
 
+    def claim_event_and_failure(self, event_id: str, failure_id: str, payment_id: str, customer_id: str, payload_dict: Dict[str, Any]) -> bool:
+        if event_id in self.processed_events:
+            return False
+        if failure_id and failure_id in self.processed_failures:
+            return False
+        claimed = self.durable_store.claim_event_and_failure(event_id, failure_id, payment_id, customer_id, payload_dict)
+        if claimed:
+            self.processed_events[event_id] = payload_dict
+            if failure_id:
+                self.processed_failures[failure_id] = payload_dict
+        return claimed
+
     def is_decision_executed(self, decision_id: str) -> bool:
         return decision_id in self.executed_decisions
 
@@ -191,28 +203,21 @@ class EventDrivenRuntime:
         customer_id = str(event_payload.get("customer_id", ""))
         payment_status = str(event_payload.get("payment_status", "FAILED"))
 
-        # 1. Idempotency Protection Check
-        if self.idempotency.is_duplicate_event(event_id):
-            cached = self.idempotency.get_event(event_id)
-            return {
-                "status": "REJECTED_DUPLICATE_EVENT",
-                "message": f"Event '{event_id}' has already been processed.",
-                "record": cached,
-            }
-
-        if failure_id and self.idempotency.is_duplicate_failure(failure_id):
-            cached = self.idempotency.get_failure(failure_id) or self.idempotency.get_event(event_id)
-            return {
-                "status": "REJECTED_DUPLICATE_EVENT",
-                "message": f"Failure ID '{failure_id}' has already been processed.",
-                "record": cached,
-            }
-
         if payment_status in ["SUCCESS", "RECOVERED"]:
             return {
                 "status": "REJECTED_ALREADY_RECOVERED",
                 "message": f"Payment '{payment_id}' is already recovered/successful.",
                 "record": None,
+            }
+
+        # 2. Atomic Durable Failure Claim BEFORE Action Inference & Adapter Execution
+        claimed = self.idempotency.claim_event_and_failure(event_id, failure_id, payment_id, customer_id, event_payload)
+        if not claimed:
+            cached = self.idempotency.get_failure(failure_id) or self.idempotency.get_event(event_id)
+            return {
+                "status": "REJECTED_DUPLICATE_EVENT",
+                "message": f"Event '{event_id}' or Failure ID '{failure_id}' has already been processed or claimed.",
+                "record": cached,
             }
 
         # Build single-row DataFrame for candidate table generation

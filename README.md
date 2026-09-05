@@ -1,7 +1,7 @@
-# RecoveryOS V3 — AI Revenue Recovery Decision Platform
+# RecoveryOS V3.1 — AI Revenue Recovery Decision Platform
 
 > **Track**: Razorpay AI Buildathon 2026 — Track 03 (AI Revenue Recovery)  
-> **Status**: Complete, Hardened & Submission-Ready (30/30 Automated Tests Passing)
+> **Status**: Complete, Hardened & Submission-Ready (38/38 Automated Tests Passing)
 
 RecoveryOS is an AI-powered economic decisioning engine that transforms payment failure recovery from blind retries into a portfolio-optimized, value-maximizing system.
 
@@ -111,7 +111,7 @@ $$\text{Expected Net Recovery} = \text{Expected Gross Recovery} - \text{Interven
 
 ## 7. Setup & Running Instructions
 
-### Run All Automated Tests (30 Tests)
+### Run All Automated Tests (38 Tests)
 ```powershell
 python -m unittest discover tests
 ```
