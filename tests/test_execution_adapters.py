@@ -28,7 +28,7 @@ class TestExecutionAdapters(unittest.TestCase):
         self.assertEqual(res["execution_status"], "EXECUTED_SIMULATION")
 
     def test_razorpay_test_mode_unauthenticated(self):
-        adapter = RazorpayTestModeAdapter(key_id=None, key_secret=None)
+        adapter = RazorpayTestModeAdapter(key_id="", key_secret="")
         decision = {"payment_id": "pay_test_123", "candidate_action": "RETRY_NOW"}
         res = adapter.execute_action(decision)
         self.assertEqual(res["execution_mode"], "RAZORPAY_TEST_MODE")
@@ -40,6 +40,18 @@ class TestExecutionAdapters(unittest.TestCase):
         res = adapter.execute_action(decision)
         self.assertEqual(res["execution_mode"], "RAZORPAY_TEST_MODE")
         self.assertEqual(res["execution_status"], "RAZORPAY_SANDBOX_DISPATCHED")
+
+    def test_verify_authentication_missing_credentials(self):
+        adapter = RazorpayTestModeAdapter(key_id="", key_secret="")
+        res = adapter.verify_authentication()
+        self.assertFalse(res["authenticated"])
+        self.assertEqual(res["reason"], "MISSING_CREDENTIALS")
+
+    def test_verify_authentication_invalid_credentials(self):
+        adapter = RazorpayTestModeAdapter(key_id="rzp_test_invalid_123", key_secret="invalid_secret_456")
+        res = adapter.verify_authentication()
+        self.assertFalse(res["authenticated"])
+        self.assertEqual(res["reason"], "HTTP_401_UNAUTHORIZED")
 
 
 if __name__ == "__main__":

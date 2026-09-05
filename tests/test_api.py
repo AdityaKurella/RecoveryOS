@@ -75,6 +75,17 @@ class TestFastAPIEndpoints(unittest.TestCase):
         response = client.post("/api/v2/events/failure", json=malformed_payload)
         self.assertEqual(response.status_code, 422)
 
+    def test_v2_test_razorpay_order_endpoint(self):
+        import os
+        os.environ["RAZORPAY_KEY_ID"] = "rzp_test_TYFLOQq6CuJpRw"
+        os.environ["RAZORPAY_KEY_SECRET"] = "bnvDurReCAcvXigTa2sTIaxl"
+        response = client.post("/api/v2/test/razorpay-order?amount=2500.0")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "SUCCESS")
+        self.assertTrue(data["order_id"].startswith("order_"))
+        self.assertEqual(data["amount_inr"], 2500.0)
+
 
 if __name__ == "__main__":
     unittest.main()

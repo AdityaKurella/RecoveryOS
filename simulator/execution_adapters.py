@@ -48,8 +48,8 @@ class SimulationExecutionAdapter(BaseExecutionAdapter):
 class RazorpayTestModeAdapter(BaseExecutionAdapter):
     """Razorpay Test Mode Sandbox Adapter."""
     def __init__(self, key_id: Optional[str] = None, key_secret: Optional[str] = None):
-        self.key_id = key_id or os.getenv("RAZORPAY_KEY_ID")
-        self.key_secret = key_secret or os.getenv("RAZORPAY_KEY_SECRET")
+        self.key_id = os.getenv("RAZORPAY_KEY_ID") if key_id is None else key_id
+        self.key_secret = os.getenv("RAZORPAY_KEY_SECRET") if key_secret is None else key_secret
 
     def execute_action(self, decision_record: Dict[str, Any]) -> Dict[str, Any]:
         if not self.key_id or not self.key_secret:
@@ -71,3 +71,35 @@ class RazorpayTestModeAdapter(BaseExecutionAdapter):
             "razorpay_payment_id": payment_id,
             "message": f"Dispatched recovery action {action} to Razorpay Test Mode API.",
         }
+
+    def verify_authentication(self) -> Dict[str, Any]:
+        """
+        Verifies HTTP Basic Authentication against Razorpay Test Mode API.
+        Never logs or returns key secret.
+        """
+        if not self.key_id or not self.key_secret:
+            return {"authenticated": False, "reason": "MISSING_CREDENTIALS"}
+
+        try:
+            import urllib.request
+            import urllib.error
+            import base64
+
+            auth_bytes = f"{self.key_id}:{self.key_secret}".encode("utf-8")
+            b64_auth = base64.b64encode(auth_bytes).decode("utf-8")
+
+            req = urllib.request.Request(
+                "https://api.razorpay.com/v1/payments?count=1",
+                headers={"Authorization": f"Basic {b64_auth}"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    return {"authenticated": True, "reason": "RAZORPAY_TEST_MODE_AUTHENTICATED"}
+                else:
+                    return {"authenticated": False, "reason": f"HTTP_{resp.status}"}
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                return {"authenticated": False, "reason": "HTTP_401_UNAUTHORIZED"}
+            return {"authenticated": False, "reason": f"HTTP_{e.code}"}
+        except Exception as e:
+            return {"authenticated": False, "reason": f"ERROR_{type(e).__name__}"}

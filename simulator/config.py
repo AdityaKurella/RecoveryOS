@@ -2,7 +2,8 @@
 RecoveryOS V2 — Centralized Configuration & Policy Settings
 """
 
-from typing import Dict, List, Set, Any
+import os
+from typing import Dict, List, Set, Any, Optional
 from pathlib import Path
 
 # Repository Paths
@@ -10,6 +11,11 @@ BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 MODEL_DIR = DATA_DIR / "recovery_probability"
 MODEL_PATH = MODEL_DIR / "counterfactual_model.pkl.gz"
+
+# Razorpay Integration Config
+RAZORPAY_WEBHOOK_SECRET: Optional[str] = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+RAZORPAY_KEY_ID: Optional[str] = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET: Optional[str] = os.getenv("RAZORPAY_KEY_SECRET")
 
 # System & Policy Versions
 MODEL_VERSION = "M10F_v1"
@@ -75,4 +81,5 @@ class SystemConfig:
             "high_value_min_prob": HIGH_VALUE_MIN_PROBABILITY,
             "max_retry_attempts": MAX_RETRY_ATTEMPTS,
             "min_autonomous_net_threshold": MIN_AUTONOMOUS_NET_THRESHOLD,
+            "razorpay_test_api_configured": bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET")),
         }

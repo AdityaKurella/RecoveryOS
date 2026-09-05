@@ -1,148 +1,233 @@
-# RecoveryOS V3.1 — AI Revenue Recovery Decision Platform
+# RecoveryOS
+> **AI-powered revenue recovery decision system for failed payments.**
 
-> **Track**: Razorpay AI Buildathon 2026 — Track 03 (AI Revenue Recovery)  
-> **Status**: Complete, Hardened & Submission-Ready (38/38 Automated Tests Passing)
+> **Built for Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery**
 
-RecoveryOS is an AI-powered economic decisioning engine that transforms payment failure recovery from blind retries into a portfolio-optimized, value-maximizing system.
-
----
-
-## 1. Why RecoveryOS is Different
-
-> **Core Philosophy**: *RecoveryOS optimizes recovery effort, not merely recovery probability.*
-
-Standard recovery systems focus strictly on predicting whether a payment can be recovered. RecoveryOS goes further by weighing predicted recovery against intervention costs, customer friction, and budget capacity. By evaluating expected net value across all candidate actions—including a zero-cost `STOP` option—RecoveryOS prevents merchants from destroying value on unrecoverable or low-margin payments.
+RecoveryOS is an intelligent decision engine that determines which failed subscription payments deserve recovery effort, which intervention is most valuable, and when to stop.
 
 ---
 
-## 2. Problem & Solution Overview
+## 1. The Problem
 
-When subscription payments fail, merchants face a trilemma:
-1. **Blind Retries**: Waste intervention costs (₹1–₹3 per attempt) and risk customer churn or card network penalties.
-2. **Static Heuristic Rules**: Ignore customer engagement, failure context, and individual payment economics.
-3. **Unconstrained Actions**: Attempt high-cost dispatches on low-value payments, destroying net revenue.
+Subscription payments fail for many different reasons, from expired cards to temporary bank server downtime.
 
-RecoveryOS solves this by evaluating 6 candidate actions (`RETRY_NOW`, `WAIT_AND_RETRY`, `SEND_REMINDER`, `PAYMENT_LINK`, `UPDATE_PAYMENT_METHOD`, `STOP`) per failure, predicting ML recovery probabilities $\hat{P}$, subtracting intervention costs, and optimizing expected net recovery under portfolio capacity constraints.
-
-$$\text{Expected Gross Recovery} = \text{Amount} \times \hat{P}(\text{Recovery})$$
-$$\text{Expected Net Recovery} = \text{Expected Gross Recovery} - \text{Intervention Cost}$$
+- **Different payment failures require different recovery actions**: A temporary bank failure may simply need a delayed retry, while an expired card requires customer outreach.
+- **Blind retries waste money and create customer friction**: Retrying every failed payment blindly incurs unnecessary payment processing fees and risks annoying customers.
+- **Current systems focus on probability, not value**: Predicting whether a payment can recover is not enough if the cost of recovering it exceeds the payment amount.
+- **RecoveryOS optimizes recovery effort**: It focuses recovery actions where they generate the highest expected net revenue.
 
 ---
 
-## 3. Platform Evolution (V1 → V2 → V3)
+## 2. The Solution
 
-- **V1 Baseline**: Foundation heuristic retry policy and early portfolio selection.
-- **V2 Platform**: Introduced the ExtraTrees decision engine, economic value modeling, portfolio optimization, bounded safety policy engine, and event-driven runtime safeguards.
-- **V3 Research & Hardening**: Introduced durable SQLite persistence, pluggable execution adapters, the ₹35 Uncertainty-Aware Hybrid Policy, forensic policy-regret analysis, and 5-seed multi-seed evaluation.
-
----
-
-## 4. Complete V3 System Architecture
+When a payment fails, RecoveryOS processes it through a clear decision flow:
 
 ```
-[Payment Failure Event: payment.failed]
-                  │
-                  ▼
-   [Validation & Idempotency Check] ──(Duplicate Event)──> [Cached Response]
-                  │
-                  ▼
-    [Context & Feature Builder]
-                  │
-                  ▼
-  [ExtraTrees Recovery Probability Model]
-                  │
-                  ▼
-  [Counterfactual Economic Value Engine] ──(Scores 6 Actions: 5 Active + STOP)
-                  │
-                  ▼
-      [Portfolio Optimizer] ──────────────(Constrains by Capacity K & Budget B)
-                  │
-                  ▼
- [₹35 Uncertainty-Aware Policy Engine] ──(Margin < ₹35 Fallback to Rules)
-                  │
-                  ▼
-     [Safety & Policy Guardrails] ────────(Assigns ALLOW, HUMAN, STOP)
-                  │
-     ┌────────────┼────────────┐
-     │            │            │
-  [ALLOW]      [HUMAN]      [STOP]
-     │            │            │
-     ▼            ▼            ▼
-[Execution     [Review     [Zero Action
- Adapter]       Queue]       Logged]
-     │
-     ▼
-[Durable SQLite State Store]
-     │
-     ▼
-[Cryptographically Identified Audit Lineage]
+Failed Payment Event
+        ↓
+1. Understand Context
+        ↓
+2. Compare Recovery Actions
+        ↓
+3. Estimate Expected Net Value
+        ↓
+4. Choose Best Safe Action
+        ↓
+5. ALLOW / HUMAN / STOP Decision
+        ↓
+6. Execute Simulation / Stop
+        ↓
+7. Record Outcome in Audit Store
 ```
+
+- **Understand Context**: Reads payment amount, failure reason, and customer payment history.
+- **Compare Recovery Actions**: Evaluates all available recovery interventions at the same time.
+- **Estimate Expected Net Value**: Calculates predicted gross recovery minus the cost of taking each action.
+- **Choose Best Safe Action**: Selects the best recovery action based on expected value and safety.
+- **ALLOW / HUMAN / STOP Decision**: Determines if the action can run automatically, needs human review, or should stop.
+- **Execute Simulation / Stop**: Executes the selected action via a sandbox adapter or logs a zero-action `STOP`.
+- **Record Outcome**: Persists decision lineage and keeps decisions and outcomes available after a restart.
 
 ---
 
-## 5. Benchmark Summary (559 Held-Out Synthetic Test Cases)
+## 3. Recovery Actions
 
-> **Note on Benchmark Metrics**: The ₹842,866.91 figure represents **ground-truth expected net recovery on 559 held-out synthetic cases** under counterfactual evaluation, and is **NOT observed production revenue**.
+For every payment failure, RecoveryOS evaluates six candidate recovery actions:
 
-| Strategy / Model | Revenue at Risk (₹) | Expected Gross (₹) | Intervention Cost (₹) | Expected NET Recovery (₹) | Recovery Rate % | Oracle Match % |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **V1 Baseline** | ₹1,090,563.78 | ₹843,404.27 | ₹1,354.00 | **₹842,050.27** | 77.34% | 53.85% |
-| **V2 Control Engine** | ₹1,090,563.78 | ₹843,404.27 | ₹1,354.00 | **₹842,050.27** | 77.34% | 53.85% |
-| **V3 Promoted Hybrid Policy (Threshold ₹35)** | ₹1,090,563.78 | ₹844,202.91 | ₹1,336.00 | **₹842,866.91** | **77.41%** | **55.81%** |
-| **Failure-Aware Rules Baseline** | ₹1,090,563.78 | ₹844,158.90 | ₹1,287.00 | **₹842,871.90** | 77.41% | N/A |
-| **Oracle Upper Bound** | ₹1,090,563.78 | ₹856,711.57 | ₹1,382.00 | **₹855,329.57** | 78.56% | 100.00% |
+- **Retry now**: Immediate payment retry (₹2.00 intervention cost)
+- **Retry later**: Scheduled delay retry (₹2.00 intervention cost)
+- **Send reminder**: Email or SMS customer notification (₹1.00 intervention cost)
+- **Send payment link**: Dedicated payment link dispatch (₹3.00 intervention cost)
+- **Ask customer to update payment method**: Billing update request (₹3.00 intervention cost)
+- **Stop**: Take no action to avoid wasting money (₹0.00 intervention cost)
 
-> **Key Result**: The V3 Promoted Hybrid Policy achieves **+₹816.63 higher expected net recovery** over V2 Control. On this synthetic benchmark, the V3 hybrid policy is **approximately at parity with the deterministic Failure-Aware Rules baseline** (within ₹4.99 of the baseline).
+### Core Economic Formula
 
----
+$$\text{Expected Net Value} = \text{Amount} \times \text{Probability of Recovery} - \text{Cost of Intervention}$$
 
-## 6. Key Architectural Capabilities
-
-1. **Counterfactual Economic Decision Engine**: Evaluates expected net recovery across all 6 candidate actions per failure.
-2. **Genuinely Selectable `STOP` Option**: For low-value or low-probability payments where intervention costs exceed gross recovery, `STOP` ($\text{cost}=0$, $\text{gross}=0$, $\text{net}=0$) ranks #1 to prevent loss.
-3. **Portfolio Optimizer under Capacity $K$**: Constrains active interventions to capacity K (e.g., top 100 cases). In the evaluated top-100 portfolio experiment, the optimizer captured 68.5% of total model net recovery while incurring 18.6% of total intervention cost—an 81.4% reduction relative to executing across the full candidate set.
-4. **₹35 Uncertainty-Aware Fallback Policy**: When the economic margin between the top ML action and the second-best action is $< \text{₹35}$, the system defaults to domain heuristic rules to prevent low-confidence errors.
-5. **Bounded Autonomy & Policy Guardrails**: Eligible low-risk actions may be executed automatically (`ALLOW`), while policy-sensitive or high-value cases with low confidence escalate to manual review (`HUMAN`) or zero-action (`STOP`).
-6. **Durable SQLite Persistence Store** (`simulator/persistence.py`): Process-restart resilient storage (`data/recoveryos_v3_state.db`) for idempotency deduplication.
-7. **Pluggable Execution Adapters**: Supports `SimulationExecutionAdapter` and `RazorpayTestModeAdapter`.
-8. **Strict Data Isolation**: Ground-truth recovery probabilities and future outcomes are 100% excluded from inference feature pipelines.
+*In plain English: "We choose an action based on how much money it is expected to recover after accounting for the cost of taking that action."*
 
 ---
 
-## 7. Setup & Running Instructions
+## 4. Why RecoveryOS Is Different
 
-### Run All Automated Tests (38 Tests)
-```powershell
-python -m unittest discover tests
-```
+### 1. It compares actions
+Instead of simply predicting whether a payment will recover, RecoveryOS compares different possible actions for the exact same failed payment to find the best option.
 
-### Run Deterministic End-to-End Demo (5 Scenarios)
-```powershell
-python simulator/demo_runner.py
-```
+### 2. It considers money, not just probability
+A 90% chance of recovering a ₹50 payment (Expected Gross: ₹45) after a ₹3 retry cost yields ₹42 net value. A 70% chance of recovering a ₹10,000 payment (Expected Gross: ₹7,000) after a ₹3 cost yields ₹6,997 net value. RecoveryOS focuses on the net revenue recovered.
 
-### Run Benchmark Evaluation
-```powershell
-$env:PYTHONIOENCODING="utf-8"
-python simulator/v3_evaluation.py
-python simulator/multi_seed_evaluation.py
-```
+### 3. It prioritizes the portfolio
+When recovery capacity or budget is limited, RecoveryOS prioritizes the failed payments where recovery effort is most valuable.
 
-### Start FastAPI Backend Service
-```powershell
-python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
-```
-
-### Start React Frontend Console
-```powershell
-cd frontend
-npm run dev -- --host 127.0.0.1 --port 5173
-```
+### 4. It knows when not to act
+When intervention costs exceed expected gross recovery, RecoveryOS selects `STOP` (zero cost, zero friction) to prevent value destruction.
 
 ---
 
-## 8. Technical Limitations & Disclaimers
+## 5. Razorpay Test Mode Integration
 
-- **Synthetic Counterfactual Benchmark**: Evaluated revenue numbers represent ground-truth expected net recovery on a 559 held-out synthetic test dataset under counterfactual evaluation, and are not observed production revenue.
-- **No Real Money Dispatched**: Automated executions are dispatched via `SimulationExecutionAdapter` or `RazorpayTestModeAdapter`. Live Razorpay API credentials are not tracked.
-- **Local SQLite Persistence**: Persistence uses a local SQLite database for process restart resilience rather than a distributed cloud cluster.
+Razorpay provides payment infrastructure and failure events. RecoveryOS acts as the decision layer that receives failure events and decides the best recovery action based on expected value and safety.
+
+```
+Razorpay Infrastructure → Failed Payment Event → RecoveryOS Decision Engine → Recovery Action → Audit Log
+```
+
+- **Razorpay Test API**: Uses official Razorpay API credentials (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`) to create test orders (`POST /api/v2/test/razorpay-order`).
+- **Standard Checkout**: Uses embedded Razorpay Standard Checkout (`checkout.js`) at `/test/checkout` to simulate customer payments.
+- **`payment.failed` Webhook**: Ingests real webhook notifications via `POST /api/v2/webhooks/razorpay`.
+- **HMAC-SHA256 Signature Verification**: Computes HMAC signatures over raw HTTP request bodies to verify authenticity.
+- **Event ID Idempotency**: Uses Razorpay `x-razorpay-event-id` headers to prevent processing the same event twice.
+- **Public HTTPS Tunnel**: Exposed via Cloudflare tunnel for external webhook delivery testing.
+
+> **Disclaimer**: Test Mode only. No real money is moved.
+
+---
+
+## 6. Safety
+
+Every decision is assigned an **ALLOW / HUMAN / STOP safety decision**:
+
+- **ALLOW**: Safe to execute autonomously.
+- **HUMAN**: High-value payment or low-confidence prediction escalated to human review.
+- **STOP**: No recovery action should be taken.
+
+### Key Safeguards
+- **Retry Limits**: Escalates to human review when maximum retry attempts are reached.
+- **Already Recovered Protection**: Rejects events for payments that are already successful.
+- **Duplicate Event Protection**: Prevents duplicate execution on webhook retries using event ID claims.
+- **Stale Payment Protection**: Blocks autonomous execution on payment failures older than 30 days.
+- **High-Value Human Review**: Escalates high-value payments (e.g. $\ge \text{₹10,000}$) with low ML confidence.
+
+---
+
+## 7. Results
+
+### Held-Out Synthetic Evaluation
+
+Evaluated on **559 held-out synthetic failed-payment cases**:
+
+| Metric | RecoveryOS V3 Hybrid Policy |
+| :--- | :---: |
+| **Expected Net Recovery** | **₹842,866.91** |
+| **Recovery Rate** | **77.41%** |
+| **Action Match with Oracle** | **55.81% (312 / 559)** |
+
+### Baseline Comparison
+
+| Policy / Model | Expected Net Recovery |
+| :--- | :---: |
+| **RecoveryOS V3 Hybrid Policy** | **₹842,866.91** |
+| **Failure-Aware Rules Baseline** | **₹842,871.90** |
+| **Oracle Upper Bound** | **₹855,329.57** |
+
+> **Disclaimer**: These results come from a held-out synthetic evaluation environment. They are not real Razorpay revenue.
+
+---
+
+## 8. Quick Start
+
+### Prerequisites & Credentials
+Copy `.env.example` to `.env` and fill in your Razorpay Test Mode credentials:
+
+```bash
+cp .env.example .env
+```
+
+```env
+RAZORPAY_KEY_ID=rzp_test_your_key_id
+RAZORPAY_KEY_SECRET=your_key_secret
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+```
+
+### Commands
+
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   cd frontend && npm install && cd ..
+   ```
+
+2. **Run Automated Tests** (50 / 50 passing):
+   ```bash
+   python -m unittest discover tests
+   ```
+
+3. **Run Benchmark Evaluation**:
+   ```bash
+   python simulator/v3_evaluation.py
+   ```
+
+4. **Start Backend Server**:
+   ```bash
+   python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+   ```
+
+5. **Start Frontend Dashboard**:
+   ```bash
+   cd frontend && npm run dev -- --host 127.0.0.1 --port 5173
+   ```
+
+6. **Launch Razorpay Test Mode Demo**:
+   Open [http://127.0.0.1:8000/test/checkout](http://127.0.0.1:8000/test/checkout) to launch Razorpay Test Checkout and simulate payment failure events.
+
+---
+
+## 9. Technology
+
+- **Python + FastAPI**: High-performance backend API and event processing pipeline.
+- **React + Vite**: Interactive frontend console with real-time Decision Replay.
+- **ExtraTrees Classifier**: Machine learning model trained to predict recovery probabilities across candidate actions.
+- **SQLite**: Local persistent state store that keeps decisions and outcomes available after a restart.
+- **Razorpay Test Mode**: Inbound event integration using Orders API, Standard Checkout, and Webhooks.
+- **Cloudflare Tunnel**: Public HTTPS URL forwarding for external webhook testing.
+
+---
+
+## 10. Technical Limitations & Disclaimers
+
+- **Synthetic Benchmark**: Benchmark metrics reflect expected net recovery on a synthetic 559-case held-out test dataset, not live production revenue.
+- **Test Mode Only**: Razorpay integration uses Test Mode only; no live customer money is moved.
+- **Simulated Execution**: Action execution uses simulation adapters (`SimulationExecutionAdapter`).
+- **Local Storage**: State store uses a local SQLite database (`data/recoveryos_v3_state.db`).
+- **Buildathon Prototype**: RecoveryOS is an evaluation prototype built for the Razorpay AI Buildathon 2026.
+
+---
+
+## 11. Project Structure
+
+- `api/`: FastAPI routes, request schemas, and webhook handlers.
+- `frontend/`: React + Vite dashboard source code and Decision Replay Console.
+- `simulator/`: Decision engine, ML value model, safety guardrails, state store, and evaluation benchmarks.
+- `tests/`: Automated unit and integration test suite (50 tests).
+- `data/`: Evaluation datasets, synthetic payment features, and trained ML model artifacts.
+- `docs/`: Technical research notes, forensic audit logs, and ablation study reports.
+
+---
+
+## 12. Buildathon Details
+
+- **Project**: RecoveryOS
+- **Event**: Razorpay AI Buildathon 2026
+- **Track**: Track 03 — AI Revenue Recovery
+- **Repository**: [RecoveryOS GitHub Repository](https://github.com/YourUsername/recoveryos)
