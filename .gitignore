@@ -29,4 +29,9 @@ data/recovery_probability/counterfactual_model.pkl
 .vscode/
 .DS_Store
 Thumbs.db
+# Database & SQLite
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

@@ -26,12 +26,14 @@ class DurableStateStore:
         self._init_sqlite()
 
     def _get_connection(self):
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 5000;")
         return conn
 
     def _init_sqlite(self):
         with self._get_connection() as conn:
+            conn.execute("PRAGMA journal_mode = WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS events (
                     event_id TEXT PRIMARY KEY,

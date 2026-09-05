@@ -230,6 +230,23 @@ def run_v3_benchmark_evaluation():
     print(f"V3 Oracle Opportunity Gap:       ₹{oracle_net - v3_net:,.2f} ({(oracle_net - v3_net)/oracle_net * 100:.2f}%)")
     print(f"V3 Oracle Action Match %:        {v3_oracle_match_pct:.2f}% ({v3_oracle_matches}/{total_failures})")
 
+    # Save standard summary CSV for API / Dashboard
+    summary_path = BASE_DIR / "data" / "evaluation" / "recoveryos_evaluation_summary.csv"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_df = pd.DataFrame([
+        {"metric": "Cases evaluated", "recoveryos": float(total_failures), "rules": float(total_failures), "oracle": float(total_failures)},
+        {"metric": "Revenue at risk", "recoveryos": round(float(total_revenue_at_risk), 2), "rules": round(float(total_revenue_at_risk), 2), "oracle": round(float(total_revenue_at_risk), 2)},
+        {"metric": "Actual recovered revenue (simulated)", "recoveryos": round(float(v3_res['gross'].sum()), 2), "rules": round(float(rules_res['gross'].sum()), 2), "oracle": round(float(oracle_res['gross'].sum()), 2)},
+        {"metric": "Intervention cost", "recoveryos": round(float(v3_res['cost'].sum()), 2), "rules": round(float(rules_res['cost'].sum()), 2), "oracle": round(float(oracle_res['cost'].sum()), 2)},
+        {"metric": "Net recovered revenue (simulated)", "recoveryos": round(float(v3_net), 2), "rules": round(float(rules_net), 2), "oracle": round(float(oracle_net), 2)},
+        {"metric": "Recovery rate %", "recoveryos": round((v3_res['gross'].sum() / total_revenue_at_risk)*100, 2), "rules": round((rules_res['gross'].sum() / total_revenue_at_risk)*100, 2), "oracle": round((oracle_res['gross'].sum() / total_revenue_at_risk)*100, 2)},
+        {"metric": "RecoveryOS vs Rules net", "recoveryos": round(v3_net - rules_net, 2), "rules": 0.0, "oracle": 0.0},
+        {"metric": "RecoveryOS vs Oracle net", "recoveryos": round(v3_net - oracle_net, 2), "rules": 0.0, "oracle": 0.0},
+        {"metric": "RecoveryOS oracle action match %", "recoveryos": round(v3_oracle_match_pct, 2), "rules": 0.0, "oracle": 100.0},
+        {"metric": "Oracle opportunity gap %", "recoveryos": round(((oracle_net - v3_net) / oracle_net)*100, 2), "rules": 0.0, "oracle": 0.0},
+    ])
+    summary_df.to_csv(summary_path, index=False)
+
     return results_df
 
 

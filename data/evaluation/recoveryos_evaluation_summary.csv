@@ -1,11 +1,11 @@
 metric,recoveryos,rules,oracle
-Cases evaluated,93.0,93.0,93.0
-Revenue at risk,638248.5199999999,638248.5199999999,638248.5199999999
-Actual recovered revenue (simulated),591218.4599999998,591998.0099999999,591172.6799999998
-Intervention cost,234.0,233.0,218.0
-Net recovered revenue (simulated),590984.4599999998,591765.0099999999,590954.6799999998
-Recovery rate %,92.63138753537571,92.75352647899598,92.62421478078788
-RecoveryOS vs Rules net,-780.5500000000466,0.0,0.0
-RecoveryOS vs Oracle net,29.78000000002794,0.0,0.0
-RecoveryOS oracle action match %,40.86021505376344,,100.0
-Oracle opportunity gap %,0.0050393035215539625,,0.0
+Cases evaluated,559.0,559.0,559.0
+Revenue at risk,1090563.78,1090563.78,1090563.78
+Actual recovered revenue (simulated),844202.91,844158.9,856711.57
+Intervention cost,1336.0,1287.0,1382.0
+Net recovered revenue (simulated),842866.91,842871.9,855329.57
+Recovery rate %,77.41,77.41,78.56
+RecoveryOS vs Rules net,-4.99,0.0,0.0
+RecoveryOS vs Oracle net,-12462.66,0.0,0.0
+RecoveryOS oracle action match %,55.81,0.0,100.0
+Oracle opportunity gap %,1.46,0.0,0.0

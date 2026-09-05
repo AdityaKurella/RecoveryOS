@@ -76,15 +76,30 @@ class TestFastAPIEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_v2_test_razorpay_order_endpoint(self):
+        # Verify endpoint respects environment credentials or returns 400 when missing
         import os
-        os.environ["RAZORPAY_KEY_ID"] = "rzp_test_TYFLOQq6CuJpRw"
-        os.environ["RAZORPAY_KEY_SECRET"] = "bnvDurReCAcvXigTa2sTIaxl"
-        response = client.post("/api/v2/test/razorpay-order?amount=2500.0")
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["status"], "SUCCESS")
-        self.assertTrue(data["order_id"].startswith("order_"))
-        self.assertEqual(data["amount_inr"], 2500.0)
+        from unittest.mock import patch, MagicMock
+        import io
+        import json
+
+        # Mock urllib.request.urlopen to prevent external network coupling in unit test and eliminate hardcoded secrets
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"id": "order_test_mock_12345"}).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+
+        with patch.dict(os.environ, {"RAZORPAY_KEY_ID": "rzp_test_mock_id", "RAZORPAY_KEY_SECRET": "test_mock_secret"}):
+            with patch("urllib.request.urlopen", return_value=mock_response):
+                response = client.post("/api/v2/test/razorpay-order?amount=2500.0")
+                self.assertEqual(response.status_code, 200)
+                data = response.json()
+                self.assertEqual(data["status"], "SUCCESS")
+                self.assertTrue(data["order_id"].startswith("order_"))
+                self.assertEqual(data["amount_inr"], 2500.0)
+
+        # Test missing credentials return 400
+        with patch.dict(os.environ, {"RAZORPAY_KEY_ID": "", "RAZORPAY_KEY_SECRET": ""}):
+            response = client.post("/api/v2/test/razorpay-order?amount=2500.0")
+            self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

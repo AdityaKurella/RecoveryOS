@@ -78,7 +78,7 @@ Instead of simply predicting whether a payment will recover, RecoveryOS compares
 A 90% chance of recovering a ₹50 payment (Expected Gross: ₹45) after a ₹3 retry cost yields ₹42 net value. A 70% chance of recovering a ₹10,000 payment (Expected Gross: ₹7,000) after a ₹3 cost yields ₹6,997 net value. RecoveryOS focuses on the net revenue recovered.
 
 ### 3. It prioritizes the portfolio
-When recovery capacity or budget is limited, RecoveryOS prioritizes the failed payments where recovery effort is most valuable.
+When recovery capacity or budget is limited, RecoveryOS uses a **Greedy Priority Portfolio Optimizer** to prioritize the top $K$ failed payments where recovery effort produces the highest expected net return under cumulative budget and frequency constraints.
 
 ### 4. It knows when not to act
 When intervention costs exceed expected gross recovery, RecoveryOS selects `STOP` (zero cost, zero friction) to prevent value destruction.
@@ -126,23 +126,27 @@ Every decision is assigned an **ALLOW / HUMAN / STOP safety decision**:
 
 ### Held-Out Synthetic Evaluation
 
-Evaluated on **559 held-out synthetic failed-payment cases**:
+Evaluated on **559 held-out synthetic failed-payment cases** (Total revenue at risk: **₹1,090,563.78**):
 
-| Metric | RecoveryOS V3 Hybrid Policy |
-| :--- | :---: |
-| **Expected Net Recovery** | **₹842,866.91** |
-| **Recovery Rate** | **77.41%** |
-| **Action Match with Oracle** | **55.81% (312 / 559)** |
+| Metric | RecoveryOS V3 Hybrid Policy | Failure-Aware Rules Baseline | Oracle Upper Bound |
+| :--- | :---: | :---: | :---: |
+| **Expected Gross Recovery** | ₹844,202.91 | ₹844,158.90 | ₹856,711.57 |
+| **Intervention Cost** | ₹1,336.00 | ₹1,287.00 | ₹1,382.00 |
+| **Expected Net Recovery** | **₹842,866.91** | ₹842,871.90 | **₹855,329.57** |
+| **Recovery Rate** | **77.41%** | 77.41% | **78.56%** |
+| **Action Match with Oracle** | **55.81% (312 / 559)** | — | 100.00% |
+| **Oracle Opportunity Gap** | **₹12,462.66 (1.46%)** | — | 0.00% |
 
-### Baseline Comparison
+### Portfolio Optimization Scope (Capacity K=100)
 
-| Policy / Model | Expected Net Recovery |
-| :--- | :---: |
-| **RecoveryOS V3 Hybrid Policy** | **₹842,866.91** |
-| **Failure-Aware Rules Baseline** | **₹842,871.90** |
-| **Oracle Upper Bound** | **₹855,329.57** |
+Using the **Greedy Priority Portfolio Optimizer** under capacity ($K=100$) and budget constraints:
+- **Prioritized Cases**: 100 of 559 inbound failures
+- **Portfolio Revenue at Risk**: ₹720,749.40
+- **Expected Net Recovery**: ₹564,671.66
+- **Simulated Recovered Amount**: ₹532,461.00
+- **Portfolio Recovery Rate**: **73.88%** (Overall Pipeline Recovery Rate: 48.82%)
 
-> **Disclaimer**: These results come from a held-out synthetic evaluation environment. They are not real Razorpay revenue.
+> **Disclaimer**: These results come from a held-out synthetic evaluation environment. They reflect simulated recovery outcomes, not real Razorpay revenue.
 
 ---
 
@@ -169,7 +173,7 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
    cd frontend && npm install && cd ..
    ```
 
-2. **Run Automated Tests** (50 / 50 passing):
+2. **Run Automated Tests** (59 / 59 passing):
    ```bash
    python -m unittest discover tests
    ```
@@ -199,7 +203,7 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 - **Python + FastAPI**: High-performance backend API and event processing pipeline.
 - **React + Vite**: Interactive frontend console with real-time Decision Replay.
 - **ExtraTrees Classifier**: Machine learning model trained to predict recovery probabilities across candidate actions.
-- **SQLite**: Local persistent state store that keeps decisions and outcomes available after a restart.
+- **SQLite**: Durable SQLite audit trail with Write-Ahead Logging (WAL) that keeps decisions and outcomes available after a restart.
 - **Razorpay Test Mode**: Inbound event integration using Orders API, Standard Checkout, and Webhooks.
 - **Cloudflare Tunnel**: Public HTTPS URL forwarding for external webhook testing.
 
@@ -222,7 +226,7 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 - `api/`: FastAPI routes, request schemas, and webhook handlers.
 - `frontend/`: React + Vite dashboard source code and Decision Replay Console.
 - `simulator/`: Decision engine, ML value model, safety guardrails, state store, and evaluation benchmarks.
-- `tests/`: Automated unit and integration test suite (50 tests).
+- `tests/`: Automated unit and integration test suite (59 tests).
 - `data/`: Evaluation datasets, synthetic payment features, and trained ML model artifacts.
 - `docs/`: Technical research notes, forensic audit logs, and ablation study reports.
 

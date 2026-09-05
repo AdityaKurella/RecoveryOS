@@ -292,6 +292,62 @@ class TestRazorpayWebhookAdapter(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("missing required payment id or amount", response.json()["detail"])
 
+    def test_K_missing_event_id_returns_400(self):
+        payload = {
+            "event": "payment.failed",
+            "payload": {"payment": {"entity": {"id": "pay_no_evt_id", "amount": 250000}}}
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        sig = compute_signature(body_bytes, self.secret)
+
+        # Header without x-razorpay-event-id and payload without event_id
+        headers = {
+            "X-Razorpay-Signature": sig,
+            "Content-Type": "application/json"
+        }
+
+        response = client.post("/api/v2/webhooks/razorpay", content=body_bytes, headers=headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Missing x-razorpay-event-id header", response.json()["detail"])
+
+    def test_L_invalid_negative_or_zero_amount_returns_400(self):
+        evt_id = f"evt_bad_amt_{int(time.time()*1000)}"
+        payload = {
+            "event": "payment.failed",
+            "payload": {"payment": {"entity": {"id": "pay_neg_amt", "amount": -50000}}}
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        sig = compute_signature(body_bytes, self.secret)
+
+        headers = {
+            "X-Razorpay-Signature": sig,
+            "x-razorpay-event-id": evt_id,
+            "Content-Type": "application/json"
+        }
+
+        response = client.post("/api/v2/webhooks/razorpay", content=body_bytes, headers=headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Invalid payment amount", response.json()["detail"])
+
+    def test_M_already_recovered_payment_rejected(self):
+        evt_id = f"evt_rec_test_{int(time.time()*1000)}"
+        pay_id = f"pay_already_rec_{int(time.time()*1000)}"
+        # First process an event that marks payment as already recovered
+        from api.main import runtime
+        # Directly test runtime already recovered check via webhook payload if payment_status is RECOVERED
+        # In razorpay webhook payload, payment status is usually failed, but if RecoveryOS runtime knows payment is recovered:
+        recovered_event = {
+            "event_id": f"evt_rec_init_{int(time.time()*1000)}",
+            "failure_id": f"FAIL_{pay_id}",
+            "payment_id": pay_id,
+            "customer_id": "cust_already_rec",
+            "amount": 2500.0,
+            "failure_reason": "INSUFFICIENT_FUNDS",
+            "payment_status": "RECOVERED",
+        }
+        res = runtime.process_payment_failed_event(recovered_event, None, [])
+        self.assertEqual(res["status"], "REJECTED_ALREADY_RECOVERED")
+
     def test_security_requirements(self):
         # 1. Secret is read dynamically from env / config, not hardcoded
         self.assertIn("RAZORPAY_WEBHOOK_SECRET", os.environ)

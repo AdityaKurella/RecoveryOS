@@ -84,6 +84,27 @@ class TestDurableStateStore(unittest.TestCase):
         self.assertIsNotNone(cached)
         self.assertEqual(cached["candidate_action"], "RETRY_NOW")
 
+    def test_audit_trail_retrieval_across_restart(self):
+        event_id = "EVT_AUDIT_TRAIL_01"
+        failure_id = "FAIL_AUDIT_01"
+        decision_rec = {
+            "decision_id": "DEC_AUDIT_01",
+            "event_id": event_id,
+            "failure_id": failure_id,
+            "candidate_action": "PAYMENT_LINK",
+            "policy_result": "ALLOW",
+            "expected_net_recovery": 1200.0,
+        }
+        self.store.record_event_and_decision(event_id, failure_id, "PAY_AUDIT", "CUST_AUDIT", decision_rec)
+
+        # Reopen database instance
+        new_store = DurableStateStore(db_path=Path(self.temp_db_path))
+        audit = new_store.get_audit_trail(limit=10)
+        self.assertTrue(len(audit) >= 1)
+        match = next((item for item in audit if item.get("decision_id") == "DEC_AUDIT_01"), None)
+        self.assertIsNotNone(match)
+        self.assertEqual(match["candidate_action"], "PAYMENT_LINK")
+
 
 if __name__ == "__main__":
     unittest.main()

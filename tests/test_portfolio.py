@@ -90,6 +90,84 @@ class TestPortfolioOptimizer(unittest.TestCase):
         self.assertEqual(total_cost, 6.0)
         self.assertLessEqual(total_cost, 7.0)
 
+    def test_empty_portfolio(self):
+        optimizer = PortfolioOptimizer(capacity=10)
+        res = optimizer.optimize_portfolio(pd.DataFrame())
+        self.assertTrue(res.empty)
+
+    def test_single_failure_capacity_zero(self):
+        candidate_df = pd.DataFrame([{
+            "failure_id": "FAIL_SINGLE_001",
+            "customer_id": "CUST_001",
+            "amount": 1000.0,
+            "candidate_action": "PAYMENT_LINK",
+            "estimated_recovery_probability": 0.8,
+            "intervention_cost": 3.0,
+            "expected_gross_recovery": 800.0,
+            "expected_net_recovery": 797.0,
+            "rank": 1,
+        }])
+        optimizer = PortfolioOptimizer(capacity=0)
+        res = optimizer.optimize_portfolio(candidate_df)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res.iloc[0]["portfolio_status"], "EXCEEDED_CAPACITY_FALLBACK_STOP")
+        self.assertFalse(res.iloc[0]["portfolio_selected"])
+        self.assertEqual(res.iloc[0]["candidate_action"], "STOP")
+
+    def test_budget_zero_forces_fallback_stop(self):
+        candidate_df = pd.DataFrame([{
+            "failure_id": "FAIL_B0",
+            "customer_id": "CUST_B0",
+            "amount": 1000.0,
+            "candidate_action": "PAYMENT_LINK",
+            "estimated_recovery_probability": 0.8,
+            "intervention_cost": 3.0,
+            "expected_gross_recovery": 800.0,
+            "expected_net_recovery": 797.0,
+            "rank": 1,
+        }])
+        optimizer = PortfolioOptimizer(capacity=10, max_budget=0.0)
+        res = optimizer.optimize_portfolio(candidate_df)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res.iloc[0]["portfolio_status"], "EXCEEDED_CAPACITY_FALLBACK_STOP")
+        self.assertFalse(res.iloc[0]["portfolio_selected"])
+
+    def test_capacity_exceeds_available_cases(self):
+        candidate_df = pd.DataFrame([{
+            "failure_id": "FAIL_EXCEED_01",
+            "customer_id": "CUST_01",
+            "amount": 1000.0,
+            "candidate_action": "RETRY_NOW",
+            "estimated_recovery_probability": 0.8,
+            "intervention_cost": 2.0,
+            "expected_gross_recovery": 800.0,
+            "expected_net_recovery": 798.0,
+            "rank": 1,
+        }])
+        optimizer = PortfolioOptimizer(capacity=100)
+        res = optimizer.optimize_portfolio(candidate_df)
+        self.assertEqual(len(res), 1)
+        self.assertTrue(res.iloc[0]["portfolio_selected"])
+        self.assertEqual(res.iloc[0]["portfolio_status"], "SELECTED_IN_CAPACITY")
+
+    def test_unconstrained_stop_decisions_handling(self):
+        candidate_df = pd.DataFrame([{
+            "failure_id": "FAIL_STOP_01",
+            "customer_id": "CUST_01",
+            "amount": 10.0,
+            "candidate_action": "STOP",
+            "estimated_recovery_probability": 0.0,
+            "intervention_cost": 0.0,
+            "expected_gross_recovery": 0.0,
+            "expected_net_recovery": 0.0,
+            "rank": 1,
+        }])
+        optimizer = PortfolioOptimizer(capacity=10)
+        res = optimizer.optimize_portfolio(candidate_df)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res.iloc[0]["portfolio_status"], "UNCONSTRAINED_STOP")
+        self.assertEqual(res.iloc[0]["candidate_action"], "STOP")
+
 
 if __name__ == "__main__":
     unittest.main()

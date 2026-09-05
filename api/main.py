@@ -423,9 +423,27 @@ def get_v2_portfolio(capacity: Optional[int] = None):
 
 @app.get("/api/v2/audit")
 def get_v2_audit_trail():
+    durable_records = runtime.idempotency.durable_store.get_audit_trail()
+    if runtime.audit_log:
+        seen_ids = set()
+        combined = []
+        for r in runtime.audit_log:
+            cid = r.get("outcome_id") or r.get("decision_id") or r.get("event_id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                combined.append(r)
+        for r in durable_records:
+            cid = r.get("outcome_id") or r.get("decision_id") or r.get("event_id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                combined.append(r)
+        records = combined
+    else:
+        records = durable_records
+
     return {
-        "audit_count": len(runtime.audit_log),
-        "audit_trail": runtime.audit_log,
+        "audit_count": len(records),
+        "audit_trail": records,
     }
 
 
@@ -454,6 +472,7 @@ def get_overview():
         total_failures = len(portfolio_df)
         selected_count = len(selected_cases)
         total_value_at_risk = money(portfolio_df["amount"].sum())
+        portfolio_value_at_risk = money(selected_cases["amount"].sum())
 
         expected_recovered_amount = money(selected_cases["expected_net_recovery"].sum())
 
@@ -461,14 +480,17 @@ def get_overview():
             outcomes_df[outcomes_df["recovered"] == True]["amount"].sum()
         )
 
-        overall_recovery_rate = round((actual_recovered_amount / total_value_at_risk) * 100, 2)
+        portfolio_recovery_rate = round((actual_recovered_amount / portfolio_value_at_risk) * 100, 2) if portfolio_value_at_risk > 0 else 0.0
+        overall_recovery_rate = round((actual_recovered_amount / total_value_at_risk) * 100, 2) if total_value_at_risk > 0 else 0.0
 
         return {
             "total_failures": total_failures,
             "selected_cases": selected_count,
             "total_value_at_risk": total_value_at_risk,
+            "portfolio_value_at_risk": portfolio_value_at_risk,
             "expected_recovered_amount": expected_recovered_amount,
             "actual_recovered_amount": actual_recovered_amount,
+            "portfolio_recovery_rate": portfolio_recovery_rate,
             "overall_recovery_rate": overall_recovery_rate,
         }
     except Exception as e:
